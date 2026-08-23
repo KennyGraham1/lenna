@@ -10,7 +10,7 @@ import {
 } from "react";
 import { frameToDataUrl, pickImageFile } from "@/lib/photo";
 
-/** Resolves with a JPEG data URL, or null if the user backed out. */
+// Resolves with a JPEG data URL, or null if the user backed out.
 type OpenCamera = (title?: string) => Promise<string | null>;
 
 const CameraContext = createContext<OpenCamera>(async () => null);
@@ -33,7 +33,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
-  /** Tear the modal down and hand `value` back to whoever opened it. */
+  // Tear down and hand `value` back to the opener.
   const finish = useCallback(
     (value: string | null) => {
       stopStream();
@@ -47,7 +47,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     [stopStream]
   );
 
-  /** Hand off to the OS file picker with the modal already dismissed. */
+  // Hand off to the file picker with the modal already dismissed.
   const finishViaPicker = useCallback(async () => {
     stopStream();
     setOpen(false);
@@ -66,14 +66,14 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  // Acquire the stream once the modal is mounted, falling back to a file picker.
+  // Acquire the stream once mounted, falling back to the file picker.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
 
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
-        // Browser has no camera API — go straight to the file picker.
+        // No camera API.
         await finishViaPicker();
         return;
       }
@@ -102,13 +102,13 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-    // `finish` is stable; re-running on every render would restart the stream.
+    // `finish` is stable; re-running would restart the stream.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => stopStream, [stopStream]);
 
-  // Escape backs out of the modal, matching every other dialog on the platform.
+  // Escape backs out.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -125,7 +125,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
   };
 
   const useFilePicker = () => {
-    // Switch from live capture to the file picker without losing the caller.
+    // Switch to the file picker without losing the caller.
     void finishViaPicker();
   };
 

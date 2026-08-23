@@ -2,9 +2,8 @@
 
 import { useRef, type RefObject } from "react";
 import type { CatalogPlant } from "@/lib/plants";
-import { hashStr } from "@/lib/state";
+import { hashStr, type Growth } from "@/lib/state";
 import { useGarden } from "./GardenProvider";
-import { useToast } from "./ToastProvider";
 
 type DragState = {
   pointerId: number;
@@ -23,7 +22,10 @@ export function GardenPlant({
   x,
   y,
   index,
-  gridRef
+  gridRef,
+  growth,
+  selected,
+  onSelect
 }: {
   plantId: string;
   plant: CatalogPlant;
@@ -31,9 +33,11 @@ export function GardenPlant({
   y: number;
   index: number;
   gridRef: RefObject<HTMLDivElement | null>;
+  growth: Growth;
+  selected: boolean;
+  onSelect: (id: string) => void;
 }) {
   const { movePlant } = useGarden();
-  const toast = useToast();
   const elRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<DragState | null>(null);
 
@@ -93,8 +97,8 @@ export function GardenPlant({
         (parseFloat(el.style.top) || 60) / 100
       );
     } else {
-      // Treat as a tap — show plant info
-      toast(`${plant.icon} ${plant.name} — Set ${plant.setId}: ${plant.setName}`);
+      // Treat as a tap — open the detail card
+      onSelect(plantId);
     }
     drag.current = null;
   };
@@ -102,9 +106,15 @@ export function GardenPlant({
   return (
     <div
       ref={elRef}
-      className={`g-plant ${sizeClass}`}
-      style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
-      title={`${plant.name} — Set ${plant.setId}: ${plant.setName}`}
+      className={`g-plant ${sizeClass} stage-${growth.index} ${selected ? "selected" : ""}`}
+      style={
+        {
+          left: `${x * 100}%`,
+          top: `${y * 100}%`,
+          "--grow": growth.scale
+        } as React.CSSProperties
+      }
+      title={`${plant.name} — ${growth.name}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
@@ -119,8 +129,13 @@ export function GardenPlant({
         }}
       >
         <span className="emoji" style={{ animationDelay: `${growDelay}ms` }}>
-          {plant.icon}
+          {growth.index === 0 ? "🌱" : plant.icon}
         </span>
+        {growth.index >= 4 && (
+          <span className="bloom-spark" aria-hidden="true">
+            ✨
+          </span>
+        )}
       </div>
       <span className="mound" />
     </div>

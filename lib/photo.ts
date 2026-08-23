@@ -1,4 +1,4 @@
-/* Image helpers — downscale captures/uploads before they go into localStorage. */
+/* Image helpers. */
 
 export function readImageAsDataUrl(file: File, maxDim = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -25,10 +25,7 @@ export function readImageAsDataUrl(file: File, maxDim = 800): Promise<string> {
   });
 }
 
-/**
- * Pick any file at all — images, PDFs, whatever. Returns the raw File so the
- * caller can hand it straight to the media store without re-encoding.
- */
+// Any file type. Returns the raw File, no re-encoding.
 export function pickAnyFile(accept = ""): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
@@ -40,7 +37,7 @@ export function pickAnyFile(accept = ""): Promise<File | null> {
   });
 }
 
-/** File-input fallback when the camera API is unavailable or denied. */
+// Fallback when the camera API is unavailable or denied.
 export function pickImageFile(): Promise<string | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");

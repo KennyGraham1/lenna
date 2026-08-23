@@ -33,8 +33,7 @@ export default function LogPage() {
     }
   };
 
-  // Attachments are written to IndexedDB the moment they're chosen, so a photo
-  // is never lost if the log is abandoned or storage is tight at submit time.
+  // Saved on pick, so nothing is lost if the log is abandoned.
   const keep = async (file: Blob | File | null, fallbackName: string) => {
     if (!file) return;
     const saved = await saveAttachment(file, fallbackName);

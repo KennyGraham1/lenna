@@ -15,7 +15,6 @@ export const COINS_PER_100ML = 500;
 export const DEFAULT_GOAL = 2000;
 export const REAL_PLANT_PHOTO_BONUS = 1000;
 export const DAILY_LOGIN_BONUS = 350;
-/** Base64 photos are the only large thing in state; keep localStorage under quota. */
 export const MAX_STORED_PHOTOS = 8;
 
 // ---------- Types ----------
@@ -24,13 +23,10 @@ export type Checkin = {
   ts: number;
   ml: number;
   coins: number;
-  /** Legacy inline base64 from before attachments moved to IndexedDB. */
-  photo: string | null;
-  /** Reference into the IndexedDB media store. */
-  media?: MediaRef | null;
+  photo: string | null;          // legacy inline base64
+  media?: MediaRef | null;       // reference into the media store
 };
 
-/** Small pointer kept in app state; the bytes live in IndexedDB. */
 export type MediaRef = { id: string; type: string; name: string; size: number };
 
 export type OwnedPlant = { ts: number; x?: number; y?: number };
@@ -100,8 +96,7 @@ export function loadState(): AppState {
       reminders: { ...base.reminders, ...(parsed.reminders || {}) }
     };
 
-    // Saves from before the derived-streak model have no goalDays. Rebuild what
-    // we can from daily history, and trust the old lastGoalDate for the rest.
+    // Older saves have no goalDays — rebuild from history.
     if (!parsed.goalDays) {
       const goalDays: Record<string, true> = {};
       for (const [day, ml] of Object.entries(merged.history)) {
@@ -116,11 +111,7 @@ export function loadState(): AppState {
   }
 }
 
-/**
- * Backstop for saves that predate the media store: legacy inline base64 is the
- * only thing left in state big enough to blow the quota. New attachments are
- * references, so this is a no-op for them.
- */
+// Only legacy inline base64 is big enough to blow the quota.
 export function limitPhotos(checkins: Checkin[], keep = MAX_STORED_PHOTOS): Checkin[] {
   let seen = 0;
   return checkins.map((c) => {
@@ -131,11 +122,8 @@ export function limitPhotos(checkins: Checkin[], keep = MAX_STORED_PHOTOS): Chec
 }
 
 export type SaveOutcome = {
-  /** false means nothing was persisted — the caller should warn the user. */
-  ok: boolean;
-  /** What actually reached storage; commit this so memory matches disk. */
-  state: AppState;
-  /** True when photos had to be dropped to fit. */
+  ok: boolean;         // false = nothing was persisted
+  state: AppState;     // what actually reached storage
   trimmed: boolean;
 };
 
@@ -145,15 +133,14 @@ export function saveState(state: AppState): SaveOutcome {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     return { ok: true, state, trimmed: false };
   } catch {
-    // Photos are the only thing big enough to blow the quota. Shed them
-    // oldest-first rather than dropping the write (and the user's coins).
+    // Shed photos oldest-first rather than losing the write.
     for (const keep of [4, 2, 1, 0]) {
       const trimmedState = { ...state, checkins: limitPhotos(state.checkins, keep) };
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmedState));
         return { ok: true, state: trimmedState, trimmed: true };
       } catch {
-        /* still too big — shed more */
+        /* still too big */
       }
     }
     return { ok: false, state, trimmed: false };
@@ -179,7 +166,7 @@ function keyToDate(key: string) {
   return new Date(y, m - 1, d);
 }
 
-/** Shift a YYYY-MM-DD key by whole days (handles month/DST boundaries). */
+// Shift a YYYY-MM-DD key by whole days.
 export function shiftKey(key: string, days: number) {
   const d = keyToDate(key);
   d.setDate(d.getDate() + days);
@@ -199,7 +186,7 @@ export function fmtTime(ts: number) {
   });
 }
 
-/** "Aug 22" — used when a check-in is filed against an earlier date. */
+// "Aug 22"
 export function fmtDay(key: string) {
   return keyToDate(key).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
@@ -213,14 +200,10 @@ export function makeId(prefix: string) {
 }
 
 // ---------- Streak logic ----------
-/**
- * Streaks are derived from `goalDays` rather than counted up as they happen,
- * so a drink logged for an earlier date can retroactively complete that day
- * and heal a gap in the run.
- */
+// Derived from goalDays, so a backdated drink can repair an earlier gap.
 export function computeStreak(goalDays: Record<string, true>, today = todayKey()): number {
   const yesterday = shiftKey(today, -1);
-  // Today counts once met; until then the run is still carried by yesterday.
+  // Until today is met the run is carried by yesterday.
   let cursor = goalDays[today] ? today : goalDays[yesterday] ? yesterday : null;
   if (!cursor) return 0;
   let n = 0;
@@ -246,7 +229,7 @@ export function computeLongestStreak(goalDays: Record<string, true>): number {
 
 export function refreshStreak(state: AppState): AppState {
   const streak = computeStreak(state.goalDays);
-  // Keep the stored best as a floor: pre-migration history can't be rebuilt.
+  // Stored best is a floor — old history can't be rebuilt.
   const longestStreak = Math.max(
     state.longestStreak,
     computeLongestStreak(state.goalDays),
@@ -257,13 +240,8 @@ export function refreshStreak(state: AppState): AppState {
 }
 
 // ---------- Logging water ----------
-/**
- * Total mL logged within `ms` either side of `at`. Now that drink times are
- * user-entered, a backdated check-in still has to count against its own
- * 10-minute window — otherwise the safety cap would be trivially bypassed by
- * logging everything as "an hour ago". When `at` is now (the default) there
- * are no later entries, so this matches the original look-back behaviour.
- */
+// mL logged either side of `at`. Measured around the drink's own time so
+// backdating can't slip past the cap.
 function mlNearTime(state: AppState, at: number, ms: number) {
   return state.checkins
     .filter((c) => Math.abs(c.ts - at) < ms)
@@ -281,8 +259,7 @@ export type LogResult =
       state: AppState;
       goalHit: boolean;
       streak: number;
-      /** YYYY-MM-DD the drink counted toward. */
-      day: string;
+      day: string;   // YYYY-MM-DD the drink counted toward
     };
 
 export function logWater(
@@ -307,7 +284,7 @@ export function logWater(
   if (!Number.isFinite(ts)) {
     return { ok: false, level: "error", msg: "Pick the time you drank it ⏰" };
   }
-  // A minute of slack absorbs clock skew between the picker and the check.
+  // A minute of slack for clock skew.
   if (ts > Date.now() + 60_000) {
     return { ok: false, level: "error", msg: "That time hasn't happened yet ⏰" };
   }
@@ -350,8 +327,7 @@ export function logWater(
     checkins: [checkin, ...state.checkins].sort((a, b) => b.ts - a.ts).slice(0, 50)
   };
 
-  // Goal / streak bookkeeping. Recorded per-day, so logging a drink against an
-  // earlier date can complete that day and repair the run around it.
+  // Goal / streak bookkeeping, recorded per-day.
   let goalHit = false;
   if (dayTotal < state.goalMl && next.history[day] >= state.goalMl && !state.goalDays[day]) {
     const goalDays: Record<string, true> = { ...state.goalDays, [day]: true };
@@ -376,6 +352,50 @@ export function logWater(
     goalHit,
     streak: next.streak,
     day
+  };
+}
+
+// ---------- Growth ----------
+// Plants advance a stage for each day you hit your water goal after planting,
+// so the garden is a record of the habit rather than of elapsed time.
+export const GROWTH_STAGES = [
+  { at: 0, name: "Seedling", scale: 0.55 },
+  { at: 1, name: "Sprout", scale: 0.72 },
+  { at: 3, name: "Growing", scale: 0.86 },
+  { at: 7, name: "Mature", scale: 1 },
+  { at: 14, name: "Blooming", scale: 1.12 }
+] as const;
+
+export type Growth = {
+  index: number;
+  name: string;
+  scale: number;
+  days: number;          // goal-days since planting
+  nextAt: number | null; // goal-days the next stage needs
+  toNext: number | null;
+};
+
+// Day keys sort lexically, so a string compare is a date compare.
+export function growthDays(state: AppState, plantedTs: number) {
+  const planted = todayKey(new Date(plantedTs));
+  return Object.keys(state.goalDays).filter((d) => d >= planted).length;
+}
+
+export function growthFor(state: AppState, plantedTs: number): Growth {
+  const days = growthDays(state, plantedTs);
+  let index = 0;
+  GROWTH_STAGES.forEach((stage, i) => {
+    if (days >= stage.at) index = i;
+  });
+  const stage = GROWTH_STAGES[index];
+  const next = GROWTH_STAGES[index + 1] ?? null;
+  return {
+    index,
+    name: stage.name,
+    scale: stage.scale,
+    days,
+    nextAt: next ? next.at : null,
+    toNext: next ? Math.max(0, next.at - days) : null
   };
 }
 

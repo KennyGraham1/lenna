@@ -1185,3 +1185,99 @@ a.brand:focus-visible { outline: 2px solid var(--green-400); outline-offset: 3px
 }
 .checkin-thumb .file-chip { padding: 4px 6px; border: none; background: none; }
 .checkin-thumb .file-chip-name { display: none; }
+
+/* ----------- Garden: growth, sky, detail ----------- */
+
+/* Growth scales the plant; --grow comes from the stage. */
+.g-plant .g-plant-inner { transform: scale(var(--grow, 1)); transform-origin: 50% 100%; }
+.g-plant { transition: filter .3s ease; }
+.g-plant.stage-0 { filter: saturate(0.75); }
+.g-plant.selected { z-index: 5; }
+.g-plant.selected .g-plant-inner { filter: drop-shadow(0 0 10px var(--green-400)); }
+
+.bloom-spark {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  font-size: 0.8rem;
+  animation: sparkle 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes sparkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.85) rotate(-8deg); }
+  50%      { opacity: 1;    transform: scale(1.1) rotate(8deg); }
+}
+
+/* Sky changes with the local hour. */
+.garden-scene.sky-dawn  .sky-strip { background: linear-gradient(180deg, #ffd9a8, #ffeccd 60%, #eaf6ea); }
+.garden-scene.sky-day   .sky-strip { background: linear-gradient(180deg, #cfeafd, #eaf7ff 60%, #eaf6ea); }
+.garden-scene.sky-dusk  .sky-strip { background: linear-gradient(180deg, #f6c99a, #f9dcc4 55%, #e6f1e6); }
+.garden-scene.sky-night .sky-strip { background: linear-gradient(180deg, #2c3e63, #4a5f8c 60%, #d9e6dc); }
+.garden-scene.sky-night .cloud { opacity: 0.35; filter: brightness(0.8); }
+
+.sky-strip .moon {
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  font-size: 1.6rem;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 210, 0.6));
+}
+.sky-strip .star {
+  position: absolute;
+  color: #fff;
+  font-size: 0.7rem;
+  opacity: 0.85;
+  animation: twinkle 3s ease-in-out infinite;
+}
+.sky-strip .star-a { top: 16px; left: 18%; animation-delay: -0.4s; }
+.sky-strip .star-b { top: 30px; left: 42%; animation-delay: -1.5s; }
+.sky-strip .star-c { top: 12px; left: 68%; animation-delay: -2.3s; }
+@keyframes twinkle {
+  0%, 100% { opacity: 0.25; }
+  50%      { opacity: 1; }
+}
+
+/* Plant detail card */
+.plant-detail { position: relative; }
+.detail-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: var(--green-50);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.detail-close:hover { background: var(--green-100); }
+.detail-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.detail-icon { font-size: 2.4rem; line-height: 1; }
+.detail-head h2 { margin: 0; }
+
+.detail-stage {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.stage-name {
+  font-weight: 800;
+  color: var(--green-700);
+  background: var(--green-50);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 0.85rem;
+}
+.stage-track { display: flex; gap: 6px; margin: 10px 0 8px; }
+.stage-pip {
+  flex: 1;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--green-100);
+  transition: background .3s ease;
+}
+.stage-pip.on { background: linear-gradient(90deg, var(--green-400), var(--green-600)); }

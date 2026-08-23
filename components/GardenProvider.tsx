@@ -22,6 +22,7 @@ type GardenContextValue = {
   water: (id: string, media?: MediaRef | null) => void;
   removePlant: (id: string) => void;
   movePlant: (id: string, x: number, y: number) => void;
+  tidyGarden: () => void;
   setGoal: (goal: number) => void;
   setReminders: (patch: Partial<AppState["reminders"]>) => void;
   fireReminder: () => void;
@@ -53,17 +54,16 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(game.defaultState);
   const [hydrated, setHydrated] = useState(false);
 
-  // Mirrors `state` so action handlers always read the freshest value
-  // without going stale inside callbacks or timers.
+  // Mirrors `state` so handlers and timers never read a stale value.
   const ref = useRef<AppState>(state);
 
-  // Warn at most once per session; a full disk shouldn't nag on every sip.
+  // Warn once per session, not on every sip.
   const warnedRef = useRef(false);
 
   const commit = useCallback(
     (next: AppState) => {
       const outcome = game.saveState(next);
-      // Commit what was actually persisted, so memory can't drift from disk.
+      // Commit what was persisted so memory matches disk.
       ref.current = outcome.state;
       setState(outcome.state);
       if (!warnedRef.current && (outcome.trimmed || !outcome.ok)) {
@@ -85,7 +85,7 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
     const withBonus = game.claimDailyLogin(next);
     if (withBonus) {
       next = withBonus;
-      // Show after the first paint so the coin bump is noticed.
+      // After first paint, so the coin bump is noticed.
       setTimeout(
         () => toast(`🌅 Daily login bonus: +${game.DAILY_LOGIN_BONUS} 🪙`, "ok"),
         900
@@ -95,7 +95,7 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
     setHydrated(true);
   }, [commit, toast]);
 
-  // Catch a day rollover while the tab sat in the background.
+  // Catch a day rollover in a backgrounded tab.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
@@ -181,6 +181,15 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
     [commit]
   );
 
+  // Drop saved coords so everything falls back to the auto-placed grid.
+  const tidyGarden = useCallback(() => {
+    const owned = Object.fromEntries(
+      Object.entries(ref.current.owned).map(([id, meta]) => [id, { ts: meta.ts }])
+    );
+    commit({ ...ref.current, owned });
+    toast("Garden tidied 🌿", "ok");
+  }, [commit, toast]);
+
   const setGoal = useCallback<GardenContextValue["setGoal"]>(
     (goal) => {
       const goalMl = game.clampGoal(goal);
@@ -223,7 +232,7 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
   );
 
   const reset = useCallback(() => {
-    // Attachments live outside app state, so clear the media store too.
+    // Attachments live outside app state.
     void clearAttachments();
     commit(game.defaultState());
     toast("Fresh start 🌱", "ok");
@@ -237,8 +246,8 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id);
   }, [hydrated, enabled, intervalMin, fireReminder]);
 
-  // Render nothing app-shaped until localStorage is read, so the server HTML
-  // and the first client render agree (no hydration mismatch, no flash of 0s).
+  // Hold until localStorage is read: avoids a hydration mismatch and a
+  // flash of zeroes.
   if (!hydrated) {
     return (
       <div className="boot-splash" role="status" aria-label="Loading">
@@ -257,6 +266,7 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
         water,
         removePlant,
         movePlant,
+        tidyGarden,
         setGoal,
         setReminders,
         fireReminder,

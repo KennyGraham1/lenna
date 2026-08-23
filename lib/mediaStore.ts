@@ -38,7 +38,7 @@ function openDb(): Promise<IDBDatabase | null> {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    // Private browsing and blocked storage land here — callers degrade to null.
+    // Private browsing / blocked storage lands here.
     req.onerror = () => resolve(null);
     req.onblocked = () => resolve(null);
   });
@@ -67,17 +67,13 @@ function makeMediaId() {
   return `m-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Convert a data: URL (what the camera canvas produces) into a Blob. */
+// Camera canvas gives us a data: URL.
 export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const res = await fetch(dataUrl);
   return res.blob();
 }
 
-/**
- * Persist a file/blob and return the reference to store in app state.
- * Returns null when storage is unavailable, so callers can warn rather than
- * pretend the attachment was kept.
- */
+// Returns null if storage is unavailable, so callers can warn.
 export async function saveAttachment(
   input: Blob | File,
   fallbackName = "photo.jpg"

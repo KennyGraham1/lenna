@@ -4,8 +4,10 @@ import {
   QUICK_WINDOW_MAX_ML,
   addRealPlant,
   buyPlant,
+  GROWTH_STAGES,
   computeLongestStreak,
   computeStreak,
+  growthFor,
   coinsFor,
   daysUntilNextWater,
   defaultState,
@@ -140,6 +142,45 @@ describe("streaks", () => {
     const r = logWater(s, 500, now - 26 * HOUR);
     expect(r.ok && r.goalHit).toBe(true);
     expect(r.ok && r.day).toBe(shiftKey(todayKey(), -1));
+  });
+});
+
+describe("growth", () => {
+  const day = (n: number) => shiftKey(todayKey(), -n);
+  const planted = Date.now() - 30 * 24 * HOUR;
+
+  it("starts every new plant as a seedling", () => {
+    const s: AppState = { ...defaultState(), goalDays: {} };
+    const g = growthFor(s, Date.now());
+    expect(g.index).toBe(0);
+    expect(g.name).toBe("Seedling");
+    expect(g.toNext).toBe(1);
+  });
+
+  it("advances a stage per goal day, not per calendar day", () => {
+    const goalDays = { [day(1)]: true, [day(2)]: true, [day(3)]: true } as Record<string, true>;
+    const s: AppState = { ...defaultState(), goalDays };
+    // Three goal days over a month of ownership -> "Growing", not "Blooming".
+    expect(growthFor(s, planted).days).toBe(3);
+    expect(growthFor(s, planted).name).toBe("Growing");
+  });
+
+  it("ignores goal days from before the plant was bought", () => {
+    const goalDays = { [day(20)]: true, [day(1)]: true } as Record<string, true>;
+    const s: AppState = { ...defaultState(), goalDays };
+    const boughtYesterday = Date.now() - 2 * 24 * HOUR;
+    expect(growthFor(s, boughtYesterday).days).toBe(1);
+  });
+
+  it("tops out at the final stage", () => {
+    const goalDays: Record<string, true> = {};
+    for (let i = 1; i <= 25; i++) goalDays[day(i)] = true;
+    const s: AppState = { ...defaultState(), goalDays };
+    const g = growthFor(s, planted);
+    expect(g.index).toBe(GROWTH_STAGES.length - 1);
+    expect(g.name).toBe("Blooming");
+    expect(g.toNext).toBeNull();
+    expect(g.nextAt).toBeNull();
   });
 });
 
