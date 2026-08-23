@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#7cc47c" />
+  <title>Hydration Garden</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🌱</text></svg>" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- Top status bar -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-leaf">🌱</span>
+        <span class="brand-name">Hydration Garden</span>
+      </div>
+      <div class="status">
+        <div class="status-chip status-coins" title="Coins">
+          <span class="chip-icon">🪙</span>
+          <span id="coin-balance">0</span>
+        </div>
+        <div class="status-chip status-streak" title="Current streak">
+          <span class="chip-icon">🔥</span>
+          <span id="streak-count">0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="content">
+
+      <!-- HOME SCREEN -->
+      <section class="screen screen-home active" data-screen="home">
+        <div class="hero-card">
+          <div class="hero-top">
+            <h1>Hello, gardener! 🌼</h1>
+            <p class="hero-sub">Sip by sip, grow your garden.</p>
+          </div>
+
+          <div class="water-ring">
+            <svg viewBox="0 0 200 200" class="ring-svg" aria-hidden="true">
+              <circle cx="100" cy="100" r="86" class="ring-bg"></circle>
+              <circle cx="100" cy="100" r="86" class="ring-fg" id="ring-progress"></circle>
+            </svg>
+            <div class="ring-center">
+              <div class="ring-amount"><span id="today-ml">0</span><small>mL</small></div>
+              <div class="ring-goal">of <span id="goal-ml">2000</span> mL</div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-big" data-go="log">💧 Log water</button>
+        </div>
+
+        <div class="card card-row">
+          <div class="stat-block">
+            <div class="stat-label">Today</div>
+            <div class="stat-value"><span id="home-today">0</span> mL</div>
+          </div>
+          <div class="stat-block">
+            <div class="stat-label">Streak</div>
+            <div class="stat-value"><span id="home-streak">0</span> 🔥</div>
+          </div>
+          <div class="stat-block">
+            <div class="stat-label">Coins</div>
+            <div class="stat-value"><span id="home-coins">0</span> 🪙</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>💌 Reminders</h2>
+            <button class="btn btn-ghost btn-small" id="toggle-reminders">Off</button>
+          </div>
+          <p class="muted">Friendly nudges every <span id="reminder-interval-label">60</span> min while the app is open.</p>
+          <div class="row">
+            <label>Every
+              <select id="reminder-interval">
+                <option value="30">30 min</option>
+                <option value="45">45 min</option>
+                <option value="60" selected>60 min</option>
+                <option value="90">90 min</option>
+                <option value="120">2 hr</option>
+              </select>
+            </label>
+            <button class="btn btn-ghost btn-small" id="test-reminder">Try a nudge</button>
+          </div>
+          <div id="last-nudge" class="muted small"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>🪴 My real plants</h2>
+            <button class="btn btn-ghost btn-small" data-go="plants">Open</button>
+          </div>
+          <p class="muted" id="real-plant-summary">Add the plants you care for in real life and we'll remind you when to water them.</p>
+        </div>
+
+        <div class="card milestones-card">
+          <div class="card-head"><h2>🏅 Streak milestones</h2></div>
+          <div class="milestones" id="milestones-list"></div>
+        </div>
+      </section>
+
+      <!-- LOG WATER SCREEN -->
+      <section class="screen screen-log" data-screen="log">
+        <div class="card">
+          <h1>💧 Log water</h1>
+          <p class="muted">Every 100 mL earns you 500 coins.</p>
+
+          <div class="quick-amounts">
+            <button class="amount-btn" data-amount="100">100 mL</button>
+            <button class="amount-btn" data-amount="200">200 mL</button>
+            <button class="amount-btn" data-amount="250">250 mL</button>
+            <button class="amount-btn" data-amount="330">330 mL</button>
+            <button class="amount-btn" data-amount="500">500 mL</button>
+            <button class="amount-btn" data-amount="750">750 mL</button>
+          </div>
+
+          <label class="field">
+            <span>Amount (mL)</span>
+            <input type="number" id="log-amount" min="10" max="2000" step="10" placeholder="e.g. 250" />
+          </label>
+
+          <div class="reward-preview">
+            <span>You'll earn</span>
+            <strong id="reward-preview">0 🪙</strong>
+          </div>
+
+          <div class="field">
+            <span>📸 Photo check-in (optional)</span>
+            <div class="photo-buttons">
+              <button class="btn-photo" id="open-water-camera">📷 Camera</button>
+              <button class="btn-photo btn-photo-alt" id="upload-water-file">📁 Upload file</button>
+            </div>
+            <button class="btn btn-ghost btn-small hidden" id="clear-water-photo">Remove photo</button>
+          </div>
+          <div id="photo-preview" class="photo-preview hidden"></div>
+
+          <button class="btn btn-primary btn-big" id="log-submit">Log it 🎉</button>
+          <div id="log-feedback" class="feedback"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>📋 Recent check-ins</h2>
+            <button class="btn btn-ghost btn-small" id="clear-checkins" title="Clear all check-ins">Clear</button>
+          </div>
+          <ul class="checkin-list" id="checkin-list"></ul>
+        </div>
+
+        <div class="card health-note">
+          <strong>💚 Drink in a healthy, balanced way.</strong>
+          <p class="muted">Most adults need around 2 L per day. The app caps logged water at 4 L per day and limits very fast logging to keep things safe.</p>
+        </div>
+      </section>
+
+      <!-- PLANT SHOP SCREEN -->
+      <section class="screen screen-shop" data-screen="shop">
+        <div class="card">
+          <h1>🛒 Plant shop</h1>
+          <p class="muted">Buy plants with your coins. Complete a set to unlock the next one!</p>
+        </div>
+        <div id="shop-sets" class="shop-sets"></div>
+      </section>
+
+      <!-- MY GARDEN SCREEN -->
+      <section class="screen screen-garden" data-screen="garden">
+        <div class="card">
+          <h1>🌿 My garden</h1>
+          <p class="muted"><span id="garden-count">0</span> plants growing happily.</p>
+          <p class="muted small">✋ Tip: drag any plant to move it around the soil.</p>
+        </div>
+        <div class="garden-scene">
+          <div class="sky-strip">
+            <span class="sun">☀️</span>
+            <span class="cloud cloud-a">☁️</span>
+            <span class="cloud cloud-b">☁️</span>
+            <span class="cloud cloud-c">☁️</span>
+            <span class="bird bird-a">🦋</span>
+            <span class="bird bird-b">🐝</span>
+          </div>
+          <div class="planting-area" id="garden-grid"></div>
+          <div class="grass-line"></div>
+        </div>
+        <div id="garden-empty" class="card empty hidden">
+          <p>Your garden is waiting! 🌱</p>
+          <button class="btn btn-primary" data-go="shop">Visit the shop</button>
+        </div>
+      </section>
+
+      <!-- REAL PLANT REMINDERS SCREEN -->
+      <section class="screen screen-plants" data-screen="plants">
+        <div class="card">
+          <h1>🪴 Real plant reminders</h1>
+          <p class="muted">Keep your real-life plants happy too.</p>
+
+          <div class="row">
+            <input type="text" id="rp-name" placeholder="Plant name (e.g. Fern by window)" />
+            <input type="text" id="rp-type" placeholder="Type (e.g. Boston Fern)" />
+          </div>
+          <div class="row">
+            <label>Water every
+              <select id="rp-schedule">
+                <option value="1">1 day</option>
+                <option value="2">2 days</option>
+                <option value="3">3 days</option>
+                <option value="5">5 days</option>
+                <option value="7" selected>7 days</option>
+                <option value="10">10 days</option>
+                <option value="14">14 days</option>
+              </select>
+            </label>
+            <button class="btn btn-primary" id="rp-add">Add plant</button>
+          </div>
+        </div>
+
+        <div id="rp-list" class="rp-list"></div>
+        <div id="rp-empty" class="card empty hidden">
+          <p>No real plants yet 🌱</p>
+        </div>
+      </section>
+
+      <!-- PROFILE SCREEN -->
+      <section class="screen screen-profile" data-screen="profile">
+        <div class="card profile-hero">
+          <div class="avatar">🌻</div>
+          <h1>Your gardener stats</h1>
+        </div>
+        <div class="card stats-grid">
+          <div class="stat-tile"><div class="stat-tile-label">Total water</div><div class="stat-tile-value"><span id="p-total-ml">0</span> mL</div></div>
+          <div class="stat-tile"><div class="stat-tile-label">Longest streak</div><div class="stat-tile-value"><span id="p-best-streak">0</span> 🔥</div></div>
+          <div class="stat-tile"><div class="stat-tile-label">Current streak</div><div class="stat-tile-value"><span id="p-cur-streak">0</span> 🔥</div></div>
+          <div class="stat-tile"><div class="stat-tile-label">Coins earned</div><div class="stat-tile-value"><span id="p-total-coins">0</span> 🪙</div></div>
+          <div class="stat-tile"><div class="stat-tile-label">Plants owned</div><div class="stat-tile-value"><span id="p-plants-owned">0</span> 🌿</div></div>
+          <div class="stat-tile"><div class="stat-tile-label">Sets completed</div><div class="stat-tile-value"><span id="p-sets-done">0</span> 🏆</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>🎯 Daily goal</h2></div>
+          <label class="field">
+            <span>Daily water goal (mL)</span>
+            <input type="number" id="goal-input" min="500" max="3500" step="100" />
+          </label>
+          <p class="muted small">Recommended: 1500-2500 mL for most adults. Max 3500 mL.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>🏆 Completed sets</h2></div>
+          <div id="completed-sets" class="completed-sets"></div>
+        </div>
+
+        <div class="card danger">
+          <div class="card-head"><h2>⚠️ Reset</h2></div>
+          <p class="muted">Erases all progress, coins, plants, and check-ins.</p>
+          <button class="btn btn-danger" id="reset-app">Reset everything</button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom nav -->
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-go="home"><span>🏠</span><label>Home</label></button>
+      <button class="nav-btn" data-go="log"><span>💧</span><label>Log</label></button>
+      <button class="nav-btn" data-go="shop"><span>🛒</span><label>Shop</label></button>
+      <button class="nav-btn" data-go="garden"><span>🌿</span><label>Garden</label></button>
+      <button class="nav-btn" data-go="profile"><span>👤</span><label>Profile</label></button>
+    </nav>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- Camera modal (live in-app camera) -->
+    <div id="camera-modal" class="camera-modal hidden" aria-hidden="true">
+      <div class="camera-header">
+        <h3 id="camera-title">Take a photo</h3>
+        <button class="icon-btn" id="camera-close" aria-label="Close camera">✕</button>
+      </div>
+      <div class="camera-stage">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <img id="camera-still" class="hidden" alt="" />
+        <div id="camera-status" class="camera-status hidden">Starting camera...</div>
+      </div>
+      <div class="camera-controls">
+        <div id="camera-pre">
+          <button class="btn-shutter" id="camera-capture">📸 Capture</button>
+          <button class="btn btn-ghost-dark btn-camera-upload" id="camera-upload">📁 Or pick from files</button>
+        </div>
+        <div id="camera-post" class="row-buttons hidden">
+          <button class="btn btn-ghost-dark" id="camera-retake">↻ Retake</button>
+          <button class="btn btn-primary" id="camera-use">✓ Use photo</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="plants.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
