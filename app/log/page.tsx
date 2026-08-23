@@ -5,6 +5,7 @@ import { coinsFor, fmtTime, DAILY_MAX_ML, type MediaRef } from "@/lib/state";
 import { pickAnyFile } from "@/lib/photo";
 import { dataUrlToBlob, saveAttachment } from "@/lib/mediaStore";
 import { StoredMedia } from "@/components/StoredMedia";
+import { AmountEstimator } from "@/components/AmountEstimator";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { useCamera } from "@/components/CameraProvider";
 import { useGarden } from "@/components/GardenProvider";
@@ -96,6 +97,8 @@ export default function LogPage() {
           <span>When you drank it</span>
           <DateTimePicker value={drankAt} onChange={setDrankAt} />
         </div>
+
+        <AmountEstimator onUse={(ml) => setAmount(String(ml))} />
 
         <div className="reward-preview">
           <span>You&apos;ll earn</span>

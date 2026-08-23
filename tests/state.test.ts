@@ -20,6 +20,7 @@ import {
   type AppState
 } from "@/lib/state";
 import { PLANT_SETS } from "@/lib/plants";
+import { CONTAINERS, estimateMl, fillLabel } from "@/lib/containers";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -249,5 +250,32 @@ describe("real plants", () => {
 
   it("rejects a blank name", () => {
     expect(addRealPlant(defaultState(), "   ", "", 7)).toBeNull();
+  });
+});
+
+describe("offline amount estimator", () => {
+  it("scales capacity by fill level, rounded to 10 mL", () => {
+    expect(estimateMl(570, 65)).toBe(370); // pint, two-thirds
+    expect(estimateMl(250, 100)).toBe(250); // full glass
+    expect(estimateMl(330, 50)).toBe(170); // half a can
+    expect(estimateMl(1000, 0)).toBe(0);
+  });
+
+  it("never exceeds the per-log ceiling", () => {
+    expect(estimateMl(4000, 100)).toBe(1500);
+  });
+
+  it("describes fill levels in words", () => {
+    expect(fillLabel(100)).toBe("Full");
+    expect(fillLabel(50)).toBe("Half");
+    expect(fillLabel(0)).toBe("Empty");
+  });
+
+  it("keeps every preset within loggable range at full", () => {
+    for (const c of CONTAINERS) {
+      const ml = estimateMl(c.ml, 100);
+      expect(ml).toBeGreaterThanOrEqual(10);
+      expect(ml).toBeLessThanOrEqual(1500);
+    }
   });
 });

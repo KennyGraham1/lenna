@@ -1281,3 +1281,62 @@ a.brand:focus-visible { outline: 2px solid var(--green-400); outline-offset: 3px
   transition: background .3s ease;
 }
 .stage-pip.on { background: linear-gradient(90deg, var(--green-400), var(--green-600)); }
+
+
+/* ----------- Offline amount estimator ----------- */
+.estimator { margin: 4px 0 10px; }
+.estimator-toggle.open { background: var(--green-100); }
+
+.estimator-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--green-50);
+  animation: dtpPop .16s ease;
+}
+
+.estimator-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 6px;
+}
+.estimator-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  font-weight: 700;
+  transition: border-color .15s ease, transform .08s ease;
+}
+.estimator-chip span:first-child { font-size: 1.25rem; line-height: 1.1; }
+.estimator-chip:hover { border-color: var(--green-200); }
+.estimator-chip:active { transform: scale(0.96); }
+.estimator-chip.active {
+  border-color: var(--green-500);
+  background: var(--surface);
+  color: var(--green-700);
+  box-shadow: 0 0 0 2px var(--green-100);
+}
+
+.estimator-capacity { margin: 8px 0 2px; }
+
+.estimator-fill { display: block; }
+.estimator-fill > span { display: block; font-size: 0.85rem; margin-bottom: 2px; }
+.estimator-fill input[type="range"] { width: 100%; accent-color: var(--green-600); }
+
+.estimator-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+.estimator-ml { font-size: 1.05rem; color: var(--ink-soft); }
+.estimator-ml strong { font-size: 1.3rem; color: var(--green-700); }
