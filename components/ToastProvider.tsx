@@ -24,7 +24,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <div id="toast" className={`toast ${current ? current.type : "hidden"}`}>
+      <div
+        id="toast"
+        className={`toast ${current ? current.type : "hidden"}`}
+        role="status"
+        aria-live="polite"
+      >
         {current?.msg}
       </div>
     </ToastContext.Provider>

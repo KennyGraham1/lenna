@@ -47,6 +47,13 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     [stopStream]
   );
 
+  /** Hand off to the OS file picker with the modal already dismissed. */
+  const finishViaPicker = useCallback(async () => {
+    stopStream();
+    setOpen(false);
+    finish(await pickImageFile());
+  }, [finish, stopStream]);
+
   const openCamera = useCallback<OpenCamera>(
     (nextTitle = "Take a photo") =>
       new Promise<string | null>((resolve) => {
@@ -67,7 +74,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
         // Browser has no camera API — go straight to the file picker.
-        finish(await pickImageFile());
+        await finishViaPicker();
         return;
       }
       try {
@@ -87,7 +94,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
         setStatus("Couldn't open camera 😕 — using file picker instead.");
         setTimeout(async () => {
           if (cancelled) return;
-          finish(await pickImageFile());
+          void finishViaPicker();
         }, 900);
       }
     })();
@@ -101,16 +108,25 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => stopStream, [stopStream]);
 
+  // Escape backs out of the modal, matching every other dialog on the platform.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") finish(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, finish]);
+
   const capture = () => {
     if (!videoRef.current) return;
     const data = frameToDataUrl(videoRef.current);
     if (data) setStill(data);
   };
 
-  const useFilePicker = async () => {
+  const useFilePicker = () => {
     // Switch from live capture to the file picker without losing the caller.
-    stopStream();
-    finish(await pickImageFile());
+    void finishViaPicker();
   };
 
   return (
@@ -120,6 +136,9 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
         id="camera-modal"
         className={`camera-modal ${open ? "" : "hidden"}`}
         aria-hidden={!open}
+        role="dialog"
+        aria-modal={open}
+        aria-label={title}
       >
         <div className="camera-header">
           <h3 id="camera-title">{title}</h3>

@@ -21,9 +21,12 @@ export function BottomNav() {
           key={item.href}
           href={item.href}
           className={`nav-btn ${pathname === item.href ? "active" : ""}`}
+          aria-current={pathname === item.href ? "page" : undefined}
         >
-          <span>{item.icon}</span>
-          <label>{item.label}</label>
+          <span className="nav-icon" aria-hidden="true">
+            {item.icon}
+          </span>
+          <span className="nav-label">{item.label}</span>
         </Link>
       ))}
     </nav>

@@ -15,6 +15,8 @@ export const COINS_PER_100ML = 500;
 export const DEFAULT_GOAL = 2000;
 export const REAL_PLANT_PHOTO_BONUS = 1000;
 export const DAILY_LOGIN_BONUS = 350;
+/** Base64 photos are the only large thing in state; keep localStorage under quota. */
+export const MAX_STORED_PHOTOS = 8;
 
 // ---------- Types ----------
 export type Checkin = {
@@ -22,8 +24,14 @@ export type Checkin = {
   ts: number;
   ml: number;
   coins: number;
+  /** Legacy inline base64 from before attachments moved to IndexedDB. */
   photo: string | null;
+  /** Reference into the IndexedDB media store. */
+  media?: MediaRef | null;
 };
+
+/** Small pointer kept in app state; the bytes live in IndexedDB. */
+export type MediaRef = { id: string; type: string; name: string; size: number };
 
 export type OwnedPlant = { ts: number; x?: number; y?: number };
 
@@ -34,7 +42,7 @@ export type RealPlant = {
   scheduleDays: number;
   lastWatered: number | null;
   created: number;
-  lastPhoto?: { ts: number; dataUrl: string };
+  lastPhoto?: { ts: number; dataUrl?: string; media?: MediaRef | null };
   lastBonusDate?: string;
 };
 
@@ -51,7 +59,8 @@ export type AppState = {
   goalMl: number;
   streak: number;
   longestStreak: number;
-  lastGoalDate: string | null; // YYYY-MM-DD of last day daily goal was hit
+  lastGoalDate: string | null; // YYYY-MM-DD of most recent day the goal was hit
+  goalDays: Record<string, true>; // every YYYY-MM-DD whose goal was met
   history: Record<string, number>; // { "YYYY-MM-DD": totalMl }
   checkins: Checkin[];
   owned: Record<string, OwnedPlant>;
@@ -68,6 +77,7 @@ export const defaultState = (): AppState => ({
   streak: 0,
   longestStreak: 0,
   lastGoalDate: null,
+  goalDays: {},
   history: {},
   checkins: [],
   owned: {},
@@ -84,22 +94,69 @@ export function loadState(): AppState {
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw) as Partial<AppState>;
     const base = defaultState();
-    return {
+    const merged: AppState = {
       ...base,
       ...parsed,
       reminders: { ...base.reminders, ...(parsed.reminders || {}) }
     };
+
+    // Saves from before the derived-streak model have no goalDays. Rebuild what
+    // we can from daily history, and trust the old lastGoalDate for the rest.
+    if (!parsed.goalDays) {
+      const goalDays: Record<string, true> = {};
+      for (const [day, ml] of Object.entries(merged.history)) {
+        if (ml >= merged.goalMl) goalDays[day] = true;
+      }
+      if (merged.lastGoalDate) goalDays[merged.lastGoalDate] = true;
+      merged.goalDays = goalDays;
+    }
+    return merged;
   } catch {
     return defaultState();
   }
 }
 
-export function saveState(state: AppState) {
-  if (typeof window === "undefined") return;
+/**
+ * Backstop for saves that predate the media store: legacy inline base64 is the
+ * only thing left in state big enough to blow the quota. New attachments are
+ * references, so this is a no-op for them.
+ */
+export function limitPhotos(checkins: Checkin[], keep = MAX_STORED_PHOTOS): Checkin[] {
+  let seen = 0;
+  return checkins.map((c) => {
+    if (!c.photo) return c;
+    seen += 1;
+    return seen <= keep ? c : { ...c, photo: null };
+  });
+}
+
+export type SaveOutcome = {
+  /** false means nothing was persisted — the caller should warn the user. */
+  ok: boolean;
+  /** What actually reached storage; commit this so memory matches disk. */
+  state: AppState;
+  /** True when photos had to be dropped to fit. */
+  trimmed: boolean;
+};
+
+export function saveState(state: AppState): SaveOutcome {
+  if (typeof window === "undefined") return { ok: true, state, trimmed: false };
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return { ok: true, state, trimmed: false };
   } catch {
-    /* quota exceeded — keep the in-memory state usable */
+    // Photos are the only thing big enough to blow the quota. Shed them
+    // oldest-first rather than dropping the write (and the user's coins).
+    for (const keep of [4, 2, 1, 0]) {
+      const trimmedState = { ...state, checkins: limitPhotos(state.checkins, keep) };
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmedState));
+        return { ok: true, state: trimmedState, trimmed: true };
+      } catch {
+        /* still too big — shed more */
+      }
+    }
+    return { ok: false, state, trimmed: false };
   }
 }
 
@@ -117,6 +174,18 @@ export function yesterdayKey() {
   return todayKey(d);
 }
 
+function keyToDate(key: string) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** Shift a YYYY-MM-DD key by whole days (handles month/DST boundaries). */
+export function shiftKey(key: string, days: number) {
+  const d = keyToDate(key);
+  d.setDate(d.getDate() + days);
+  return todayKey(d);
+}
+
 export function todayMl(state: AppState) {
   return state.history[todayKey()] || 0;
 }
@@ -130,6 +199,11 @@ export function fmtTime(ts: number) {
   });
 }
 
+/** "Aug 22" — used when a check-in is filed against an earlier date. */
+export function fmtDay(key: string) {
+  return keyToDate(key).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export function coinsFor(ml: number) {
   return Math.round((ml / 100) * COINS_PER_100ML);
 }
@@ -139,22 +213,61 @@ export function makeId(prefix: string) {
 }
 
 // ---------- Streak logic ----------
-/** Streak resets if a full day was missed (lastGoalDate older than yesterday). */
+/**
+ * Streaks are derived from `goalDays` rather than counted up as they happen,
+ * so a drink logged for an earlier date can retroactively complete that day
+ * and heal a gap in the run.
+ */
+export function computeStreak(goalDays: Record<string, true>, today = todayKey()): number {
+  const yesterday = shiftKey(today, -1);
+  // Today counts once met; until then the run is still carried by yesterday.
+  let cursor = goalDays[today] ? today : goalDays[yesterday] ? yesterday : null;
+  if (!cursor) return 0;
+  let n = 0;
+  while (goalDays[cursor]) {
+    n++;
+    cursor = shiftKey(cursor, -1);
+  }
+  return n;
+}
+
+export function computeLongestStreak(goalDays: Record<string, true>): number {
+  const keys = Object.keys(goalDays).sort();
+  let best = 0;
+  let run = 0;
+  let prev: string | null = null;
+  for (const k of keys) {
+    run = prev && shiftKey(prev, 1) === k ? run + 1 : 1;
+    if (run > best) best = run;
+    prev = k;
+  }
+  return best;
+}
+
 export function refreshStreak(state: AppState): AppState {
-  if (!state.lastGoalDate) {
-    return state.streak === 0 ? state : { ...state, streak: 0 };
-  }
-  const last = state.lastGoalDate;
-  if (last !== todayKey() && last !== yesterdayKey()) {
-    return state.streak === 0 ? state : { ...state, streak: 0 };
-  }
-  return state;
+  const streak = computeStreak(state.goalDays);
+  // Keep the stored best as a floor: pre-migration history can't be rebuilt.
+  const longestStreak = Math.max(
+    state.longestStreak,
+    computeLongestStreak(state.goalDays),
+    streak
+  );
+  if (streak === state.streak && longestStreak === state.longestStreak) return state;
+  return { ...state, streak, longestStreak };
 }
 
 // ---------- Logging water ----------
-function recentMlInWindow(state: AppState, ms: number) {
-  const cutoff = Date.now() - ms;
-  return state.checkins.filter((c) => c.ts >= cutoff).reduce((sum, c) => sum + c.ml, 0);
+/**
+ * Total mL logged within `ms` either side of `at`. Now that drink times are
+ * user-entered, a backdated check-in still has to count against its own
+ * 10-minute window — otherwise the safety cap would be trivially bypassed by
+ * logging everything as "an hour ago". When `at` is now (the default) there
+ * are no later entries, so this matches the original look-back behaviour.
+ */
+function mlNearTime(state: AppState, at: number, ms: number) {
+  return state.checkins
+    .filter((c) => Math.abs(c.ts - at) < ms)
+    .reduce((sum, c) => sum + c.ml, 0);
 }
 
 export type LogResult =
@@ -168,12 +281,15 @@ export type LogResult =
       state: AppState;
       goalHit: boolean;
       streak: number;
+      /** YYYY-MM-DD the drink counted toward. */
+      day: string;
     };
 
 export function logWater(
   state: AppState,
   rawMl: number,
-  photoDataUrl?: string | null
+  at: number,
+  media?: MediaRef | null
 ): LogResult {
   const ml = Math.round(Number(rawMl));
   if (!Number.isFinite(ml) || ml < 10) {
@@ -187,7 +303,16 @@ export function logWater(
     };
   }
 
-  const day = todayKey();
+  const ts = Math.round(Number(at));
+  if (!Number.isFinite(ts)) {
+    return { ok: false, level: "error", msg: "Pick the time you drank it ⏰" };
+  }
+  // A minute of slack absorbs clock skew between the picker and the check.
+  if (ts > Date.now() + 60_000) {
+    return { ok: false, level: "error", msg: "That time hasn't happened yet ⏰" };
+  }
+
+  const day = todayKey(new Date(ts));
   const dayTotal = state.history[day] || 0;
   if (dayTotal + ml > DAILY_MAX_ML) {
     return {
@@ -197,7 +322,7 @@ export function logWater(
     };
   }
 
-  const recent = recentMlInWindow(state, QUICK_WINDOW_MS);
+  const recent = mlNearTime(state, ts, QUICK_WINDOW_MS);
   if (recent + ml > QUICK_WINDOW_MAX_ML) {
     return {
       ok: false,
@@ -209,10 +334,11 @@ export function logWater(
   const earned = coinsFor(ml);
   const checkin: Checkin = {
     id: makeId("c"),
-    ts: Date.now(),
+    ts,
     ml,
     coins: earned,
-    photo: photoDataUrl || null
+    photo: null,
+    media: media || null
   };
 
   let next: AppState = {
@@ -221,19 +347,21 @@ export function logWater(
     totalMlLogged: state.totalMlLogged + ml,
     coins: state.coins + earned,
     totalCoinsEarned: state.totalCoinsEarned + earned,
-    checkins: [checkin, ...state.checkins].slice(0, 50)
+    checkins: [checkin, ...state.checkins].sort((a, b) => b.ts - a.ts).slice(0, 50)
   };
 
-  // Goal / streak bookkeeping
+  // Goal / streak bookkeeping. Recorded per-day, so logging a drink against an
+  // earlier date can complete that day and repair the run around it.
   let goalHit = false;
-  if (dayTotal < state.goalMl && next.history[day] >= state.goalMl && state.lastGoalDate !== day) {
-    // If yesterday was the last goal day, continue streak. Otherwise restart at 1.
-    const streak = state.lastGoalDate === yesterdayKey() ? state.streak + 1 : 1;
+  if (dayTotal < state.goalMl && next.history[day] >= state.goalMl && !state.goalDays[day]) {
+    const goalDays: Record<string, true> = { ...state.goalDays, [day]: true };
+    const streak = computeStreak(goalDays);
     next = {
       ...next,
+      goalDays,
       streak,
-      lastGoalDate: day,
-      longestStreak: Math.max(state.longestStreak, streak)
+      lastGoalDate: Object.keys(goalDays).sort().pop() ?? day,
+      longestStreak: Math.max(state.longestStreak, computeLongestStreak(goalDays), streak)
     };
     goalHit = true;
   }
@@ -246,7 +374,8 @@ export function logWater(
     checkin,
     state: next,
     goalHit,
-    streak: next.streak
+    streak: next.streak,
+    day
   };
 }
 
@@ -329,7 +458,7 @@ export type WaterResult = { state: AppState; msg: string } | null;
 export function waterRealPlant(
   state: AppState,
   id: string,
-  photoDataUrl?: string | null
+  media?: MediaRef | null
 ): WaterResult {
   const existing = state.realPlants.find((rp) => rp.id === id);
   if (!existing) return null;
@@ -338,8 +467,8 @@ export function waterRealPlant(
   let bonus = 0;
   const updated: RealPlant = { ...existing, lastWatered: Date.now() };
 
-  if (photoDataUrl) {
-    updated.lastPhoto = { ts: Date.now(), dataUrl: photoDataUrl };
+  if (media) {
+    updated.lastPhoto = { ts: Date.now(), media };
     if (existing.lastBonusDate !== today) {
       bonus = REAL_PLANT_PHOTO_BONUS;
       updated.lastBonusDate = today;
@@ -356,7 +485,7 @@ export function waterRealPlant(
   const msg =
     bonus > 0
       ? `💧 ${updated.name} watered! +${bonus.toLocaleString()} 🪙 photo bonus 🎉`
-      : photoDataUrl
+      : media
         ? `💧 ${updated.name} watered! (photo bonus already claimed today)`
         : `💧 Watered ${updated.name}!`;
 

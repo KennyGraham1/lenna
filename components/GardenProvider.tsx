@@ -8,17 +8,18 @@ import {
   useRef,
   useState
 } from "react";
+import { clearAttachments } from "@/lib/mediaStore";
 import { REMINDER_MESSAGES } from "@/lib/plants";
 import * as game from "@/lib/state";
-import type { AppState, LogResult } from "@/lib/state";
+import type { AppState, LogResult, MediaRef } from "@/lib/state";
 import { useToast } from "./ToastProvider";
 
 type GardenContextValue = {
   state: AppState;
-  logWater: (ml: number, photo?: string | null) => LogResult;
+  logWater: (ml: number, at: number, media?: MediaRef | null) => LogResult;
   buy: (plantId: string) => void;
   addPlant: (name: string, type: string, days: number | string) => boolean;
-  water: (id: string, photo?: string | null) => void;
+  water: (id: string, media?: MediaRef | null) => void;
   removePlant: (id: string) => void;
   movePlant: (id: string, x: number, y: number) => void;
   setGoal: (goal: number) => void;
@@ -56,11 +57,27 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
   // without going stale inside callbacks or timers.
   const ref = useRef<AppState>(state);
 
-  const commit = useCallback((next: AppState) => {
-    ref.current = next;
-    setState(next);
-    game.saveState(next);
-  }, []);
+  // Warn at most once per session; a full disk shouldn't nag on every sip.
+  const warnedRef = useRef(false);
+
+  const commit = useCallback(
+    (next: AppState) => {
+      const outcome = game.saveState(next);
+      // Commit what was actually persisted, so memory can't drift from disk.
+      ref.current = outcome.state;
+      setState(outcome.state);
+      if (!warnedRef.current && (outcome.trimmed || !outcome.ok)) {
+        warnedRef.current = true;
+        toast(
+          outcome.ok
+            ? "📸 Storage is full — older check-in photos were removed."
+            : "⚠️ Couldn't save progress — device storage is full.",
+          "warn"
+        );
+      }
+    },
+    [toast]
+  );
 
   // ---------- Hydrate from localStorage ----------
   useEffect(() => {
@@ -91,11 +108,19 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
 
   // ---------- Actions ----------
   const logWater = useCallback<GardenContextValue["logWater"]>(
-    (ml, photo) => {
-      const result = game.logWater(ref.current, ml, photo);
+    (ml, at, media) => {
+      const result = game.logWater(ref.current, ml, at, media);
       if (result.ok) {
         commit(result.state);
-        if (result.goalHit) toast(`🎉 Daily goal hit! Streak ${result.streak} 🔥`, "ok");
+        if (result.goalHit) {
+          const forToday = result.day === game.todayKey();
+          toast(
+            forToday
+              ? `🎉 Daily goal hit! Streak ${result.streak} 🔥`
+              : `🎉 Goal completed for ${game.fmtDay(result.day)}! Streak ${result.streak} 🔥`,
+            "ok"
+          );
+        }
       }
       return result;
     },
@@ -130,8 +155,8 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
   );
 
   const water = useCallback<GardenContextValue["water"]>(
-    (id, photo) => {
-      const result = game.waterRealPlant(ref.current, id, photo);
+    (id, media) => {
+      const result = game.waterRealPlant(ref.current, id, media);
       if (!result) return;
       commit(result.state);
       toast(result.msg, "ok");
@@ -198,6 +223,8 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
   );
 
   const reset = useCallback(() => {
+    // Attachments live outside app state, so clear the media store too.
+    void clearAttachments();
     commit(game.defaultState());
     toast("Fresh start 🌱", "ok");
   }, [commit, toast]);

@@ -1004,3 +1004,184 @@ a.btn {
   cursor: pointer;
 }
 a.btn.btn-big { display: block; width: 100%; }
+
+
+/* Nav labels are <span> now (a <label> with no form control misleads AT).
+   Re-separate icon sizing from label sizing. */
+.bottom-nav .nav-btn .nav-label {
+  font-size: 0.78rem;
+  line-height: 1.2;
+  transform: none;
+}
+.bottom-nav .nav-btn.active .nav-label { transform: none; }
+
+/* ----------- Date & time picker (react-day-picker, garden-themed) ----------- */
+.dtp { position: relative; }
+
+.dtp-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .08s ease;
+}
+.dtp-trigger:hover { border-color: var(--green-200); }
+.dtp-trigger.open,
+.dtp-trigger:focus-visible {
+  border-color: var(--green-400);
+  box-shadow: 0 0 0 3px var(--green-50);
+  outline: none;
+}
+.dtp-trigger:active { transform: scale(0.995); }
+.dtp-trigger-icon { font-size: 1.15rem; line-height: 1; }
+.dtp-trigger-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.dtp-trigger-text strong { font-size: 0.98rem; font-weight: 700; }
+.dtp-trigger-text small { color: var(--muted); font-size: 0.82rem; }
+.dtp-chevron { color: var(--muted); transition: transform .18s ease; }
+.dtp-trigger.open .dtp-chevron { transform: rotate(180deg); }
+
+.dtp-panel {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  animation: dtpPop .16s ease;
+  outline: none;
+}
+@keyframes dtpPop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.dtp-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.dtp-chip {
+  border: 1px solid var(--green-100);
+  background: var(--green-50);
+  color: var(--green-700);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: background .15s ease, transform .08s ease;
+}
+.dtp-chip:hover { background: var(--green-100); }
+.dtp-chip:active { transform: scale(0.96); }
+
+.dtp-time {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.dtp-time label { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.dtp-time label span { font-size: 0.8rem; color: var(--muted); font-weight: 700; }
+.dtp-time input[type="time"] {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+}
+.dtp-time input[type="time"]:focus-visible {
+  border-color: var(--green-400);
+  box-shadow: 0 0 0 3px var(--green-50);
+  outline: none;
+}
+.dtp-done {
+  padding: 9px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--green-500), var(--green-600));
+  color: #fff;
+  font-weight: 700;
+}
+
+/* react-day-picker theme hooks */
+.dtp-panel .rdp-root {
+  --rdp-accent-color: var(--green-600);
+  --rdp-accent-background-color: var(--green-50);
+  --rdp-today-color: var(--green-700);
+  --rdp-day-height: 38px;
+  --rdp-day-width: 38px;
+  --rdp-day_button-border-radius: 12px;
+  --rdp-selected-border: none;
+  --rdp-outside-opacity: 0.35;
+  --rdp-disabled-opacity: 0.28;
+  font-family: inherit;
+  margin: 0;
+}
+.dtp-panel .rdp-month_caption { font-size: 0.98rem; font-weight: 800; color: var(--ink); }
+.dtp-panel .rdp-weekday { color: var(--muted); font-size: 0.75rem; font-weight: 700; }
+.dtp-panel .rdp-day_button { border-radius: 12px; font-weight: 600; }
+.dtp-panel .rdp-day_button:hover { background: var(--green-50); }
+.dtp-panel .rdp-selected .rdp-day_button {
+  background: linear-gradient(180deg, var(--green-500), var(--green-600));
+  color: #fff;
+  font-weight: 800;
+}
+.dtp-panel .rdp-today:not(.rdp-selected) .rdp-day_button {
+  color: var(--green-700);
+  box-shadow: inset 0 0 0 2px var(--green-200);
+}
+.dtp-panel .rdp-chevron { fill: var(--green-600); }
+.dtp-panel .rdp-button_previous:hover .rdp-chevron,
+.dtp-panel .rdp-button_next:hover .rdp-chevron { fill: var(--green-700); }
+
+/* Brand doubles as a home link */
+a.brand {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: opacity .15s ease, transform .08s ease;
+}
+a.brand:hover { opacity: 0.75; }
+a.brand:active { transform: scale(0.98); }
+a.brand:focus-visible { outline: 2px solid var(--green-400); outline-offset: 3px; }
+
+/* Non-image attachments (PDFs, docs…) show as a labelled chip */
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--green-50);
+}
+.file-chip-ext {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--green-600);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.file-chip-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.checkin-thumb .file-chip { padding: 4px 6px; border: none; background: none; }
+.checkin-thumb .file-chip-name { display: none; }

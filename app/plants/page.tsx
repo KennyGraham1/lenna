@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { daysUntilNextWater, todayKey, type RealPlant } from "@/lib/state";
+import { dataUrlToBlob, saveAttachment } from "@/lib/mediaStore";
 import { useCamera } from "@/components/CameraProvider";
 import { useGarden } from "@/components/GardenProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -48,7 +49,12 @@ export default function PlantsPage() {
   const waterWithPhoto = async (p: RealPlant) => {
     const dataUrl = await openCamera(`Photo: ${p.name}`);
     if (!dataUrl) return; // user cancelled — don't water
-    water(p.id, dataUrl);
+    const saved = await saveAttachment(await dataUrlToBlob(dataUrl), `${p.name}.jpg`);
+    if (!saved) {
+      toast("Couldn't save that photo — storage is unavailable.", "warn");
+      return;
+    }
+    water(p.id, saved);
   };
 
   return (

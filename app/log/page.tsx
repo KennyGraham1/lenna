@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { coinsFor, fmtTime, DAILY_MAX_ML } from "@/lib/state";
-import { pickImageFile } from "@/lib/photo";
+import { coinsFor, fmtTime, DAILY_MAX_ML, type MediaRef } from "@/lib/state";
+import { pickAnyFile } from "@/lib/photo";
+import { dataUrlToBlob, saveAttachment } from "@/lib/mediaStore";
+import { StoredMedia } from "@/components/StoredMedia";
+import { DateTimePicker } from "@/components/DateTimePicker";
 import { useCamera } from "@/components/CameraProvider";
 import { useGarden } from "@/components/GardenProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -15,27 +18,37 @@ export default function LogPage() {
   const toast = useToast();
 
   const [amount, setAmount] = useState("");
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [drankAt, setDrankAt] = useState(() => new Date());
+  const [attachment, setAttachment] = useState<MediaRef | null>(null);
   const [feedback, setFeedback] = useState<{ msg: string; level: string } | null>(null);
 
   const submit = () => {
-    const result = logWater(Number(amount), photo);
+    const result = logWater(Number(amount), drankAt.getTime(), attachment);
     setFeedback({ msg: result.msg, level: result.level });
     if (result.ok) {
       setAmount("");
-      setPhoto(null);
+      setAttachment(null);
+      setDrankAt(new Date());
       toast(result.msg, "ok");
     }
   };
 
+  // Attachments are written to IndexedDB the moment they're chosen, so a photo
+  // is never lost if the log is abandoned or storage is tight at submit time.
+  const keep = async (file: Blob | File | null, fallbackName: string) => {
+    if (!file) return;
+    const saved = await saveAttachment(file, fallbackName);
+    if (saved) setAttachment(saved);
+    else toast("Couldn't save that file — storage is unavailable.", "warn");
+  };
+
   const capture = async () => {
     const dataUrl = await openCamera("Photo your drink");
-    if (dataUrl) setPhoto(dataUrl);
+    if (dataUrl) await keep(await dataUrlToBlob(dataUrl), "check-in.jpg");
   };
 
   const upload = async () => {
-    const dataUrl = await pickImageFile();
-    if (dataUrl) setPhoto(dataUrl);
+    await keep(await pickAnyFile(), "attachment");
   };
 
   const clear = () => {
@@ -80,6 +93,11 @@ export default function LogPage() {
           />
         </label>
 
+        <div className="field">
+          <span>When you drank it</span>
+          <DateTimePicker value={drankAt} onChange={setDrankAt} />
+        </div>
+
         <div className="reward-preview">
           <span>You&apos;ll earn</span>
           <strong>{coinsFor(Number(amount) || 0).toLocaleString()} 🪙</strong>
@@ -92,19 +110,18 @@ export default function LogPage() {
               📷 Camera
             </button>
             <button className="btn-photo btn-photo-alt" onClick={upload}>
-              📁 Upload file
+              📁 Attach file
             </button>
           </div>
-          {photo && (
-            <button className="btn btn-ghost btn-small" onClick={() => setPhoto(null)}>
-              Remove photo
+          {attachment && (
+            <button className="btn btn-ghost btn-small" onClick={() => setAttachment(null)}>
+              Remove attachment
             </button>
           )}
         </div>
-        {photo && (
+        {attachment && (
           <div className="photo-preview">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo} alt="check-in" />
+            <StoredMedia media={attachment} alt="check-in" />
           </div>
         )}
 
@@ -126,9 +143,8 @@ export default function LogPage() {
           {state.checkins.slice(0, 10).map((c) => (
             <li key={c.id}>
               <div className="checkin-thumb">
-                {c.photo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={c.photo} alt="" />
+                {c.media || c.photo ? (
+                  <StoredMedia media={c.media} legacy={c.photo} alt="" />
                 ) : (
                   "💧"
                 )}

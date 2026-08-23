@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PLANT_SETS } from "@/lib/plants";
-import { ownedCountInSet } from "@/lib/state";
+import { clampGoal, ownedCountInSet } from "@/lib/state";
 import { useGarden } from "@/components/GardenProvider";
 
 export default function ProfilePage() {
@@ -61,7 +61,15 @@ export default function ProfilePage() {
             step="100"
             value={goalInput}
             onChange={(e) => setGoalInput(e.target.value)}
-            onBlur={() => setGoal(Number(goalInput))}
+            onBlur={() => {
+              // Mirrors the old `change` event: only commit a real edit, so
+              // tabbing through the field doesn't fire a "goal set" toast.
+              if (clampGoal(Number(goalInput)) === state.goalMl) {
+                setGoalInput(String(state.goalMl));
+                return;
+              }
+              setGoal(Number(goalInput));
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
             }}

@@ -25,6 +25,21 @@ export function readImageAsDataUrl(file: File, maxDim = 800): Promise<string> {
   });
 }
 
+/**
+ * Pick any file at all — images, PDFs, whatever. Returns the raw File so the
+ * caller can hand it straight to the media store without re-encoding.
+ */
+export function pickAnyFile(accept = ""): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    if (accept) input.accept = accept;
+    input.oncancel = () => resolve(null);
+    input.onchange = () => resolve(input.files?.[0] ?? null);
+    input.click();
+  });
+}
+
 /** File-input fallback when the camera API is unavailable or denied. */
 export function pickImageFile(): Promise<string | null> {
   return new Promise((resolve) => {
@@ -32,6 +47,10 @@ export function pickImageFile(): Promise<string | null> {
     input.type = "file";
     input.accept = "image/*";
     input.capture = "environment";
+    // Browsers fire `cancel` when the dialog is dismissed; without this the
+    // promise would hang forever and the caller would wait on a photo that
+    // is never coming.
+    input.oncancel = () => resolve(null);
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return resolve(null);

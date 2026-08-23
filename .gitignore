@@ -33,6 +33,10 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Framework-generated agent instructions (rewritten on every `next dev`)
+AGENTS.md
+CLAUDE.md
+
 # Deployment
 .vercel
 

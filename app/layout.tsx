@@ -4,6 +4,7 @@ import { CameraProvider } from "@/components/CameraProvider";
 import { GardenProvider } from "@/components/GardenProvider";
 import { ToastProvider } from "@/components/ToastProvider";
 import { TopBar } from "@/components/TopBar";
+import "react-day-picker/style.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

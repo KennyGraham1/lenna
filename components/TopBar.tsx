@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useGarden } from "./GardenProvider";
 
@@ -18,10 +19,10 @@ export function TopBar() {
 
   return (
     <header className="topbar">
-      <div className="brand">
+      <Link href="/" className="brand" aria-label="Hydration Garden — go home">
         <span className="brand-leaf">🌱</span>
         <span className="brand-name">Hydration Garden</span>
-      </div>
+      </Link>
       <div className="status">
         <div className="status-chip status-coins" title="Coins">
           <span className="chip-icon">🪙</span>
