@@ -16,6 +16,17 @@ export const DEFAULT_GOAL = 2000;
 export const REAL_PLANT_PHOTO_BONUS = 1000;
 export const DAILY_LOGIN_BONUS = 350;
 export const MAX_STORED_PHOTOS = 8;
+export const MAX_DURATION_MIN = 240;
+
+// How long the drink took. 0 = in one go.
+export const DURATIONS = [
+  { min: 0, label: "In one go" },
+  { min: 5, label: "5 min" },
+  { min: 15, label: "15 min" },
+  { min: 30, label: "30 min" },
+  { min: 60, label: "1 hour" },
+  { min: 120, label: "2 hours" }
+] as const;
 
 // ---------- Types ----------
 export type Checkin = {
@@ -23,6 +34,7 @@ export type Checkin = {
   ts: number;
   ml: number;
   coins: number;
+  durationMin?: number;          // how long it took; 0/absent = in one go
   photo: string | null;          // legacy inline base64
   media?: MediaRef | null;       // reference into the media store
 };
@@ -166,6 +178,12 @@ function keyToDate(key: string) {
   return new Date(y, m - 1, d);
 }
 
+// Whole days from key `a` to key `b`. Both sit at local midnight, so rounding
+// absorbs the 23/25-hour days at a DST change.
+export function daysBetweenKeys(a: string, b: string) {
+  return Math.round((keyToDate(b).getTime() - keyToDate(a).getTime()) / 86400000);
+}
+
 // Shift a YYYY-MM-DD key by whole days.
 export function shiftKey(key: string, days: number) {
   const d = keyToDate(key);
@@ -240,12 +258,47 @@ export function refreshStreak(state: AppState): AppState {
 }
 
 // ---------- Logging water ----------
-// mL logged either side of `at`. Measured around the drink's own time so
-// backdating can't slip past the cap.
-function mlNearTime(state: AppState, at: number, ms: number) {
-  return state.checkins
-    .filter((c) => Math.abs(c.ts - at) < ms)
-    .reduce((sum, c) => sum + c.ml, 0);
+// A drink occupies the span it was actually drunk over: `ts` is when it was
+// finished, so a 30-minute drink covers [ts - 30min, ts]. Sipped drinks spread
+// their volume evenly across that span, so an hour-long bottle contributes only
+// its overlapping share to any 10-minute window.
+export type DrinkSpan = { start: number; end: number; ml: number };
+
+export function toSpan(c: { ts: number; ml: number; durationMin?: number }): DrinkSpan {
+  const span = Math.max(0, c.durationMin ?? 0) * 60_000;
+  return { start: c.ts - span, end: c.ts, ml: c.ml };
+}
+
+// Volume of `span` falling inside the window [wStart, wEnd].
+function overlapMl(span: DrinkSpan, wStart: number, wEnd: number) {
+  if (span.end === span.start) {
+    // Downed in one go: a point mass, counted if the window covers it.
+    return span.start >= wStart && span.start <= wEnd ? span.ml : 0;
+  }
+  const lo = Math.max(span.start, wStart);
+  const hi = Math.min(span.end, wEnd);
+  if (hi <= lo) return 0;
+  return span.ml * ((hi - lo) / (span.end - span.start));
+}
+
+// Heaviest 10 minutes anywhere in the set. The total is piecewise-linear in the
+// window's start, so its maximum sits on a breakpoint — a span edge, or a span
+// edge minus the window length. Evaluating those candidates is exact.
+export function maxMlInWindow(spans: DrinkSpan[], ms: number) {
+  const candidates = new Set<number>();
+  for (const s of spans) {
+    candidates.add(s.start);
+    candidates.add(s.end);
+    candidates.add(s.start - ms);
+    candidates.add(s.end - ms);
+  }
+  let max = 0;
+  for (const wStart of candidates) {
+    let sum = 0;
+    for (const s of spans) sum += overlapMl(s, wStart, wStart + ms);
+    if (sum > max) max = sum;
+  }
+  return max;
 }
 
 export type LogResult =
@@ -266,6 +319,7 @@ export function logWater(
   state: AppState,
   rawMl: number,
   at: number,
+  durationMin = 0,
   media?: MediaRef | null
 ): LogResult {
   const ml = Math.round(Number(rawMl));
@@ -299,8 +353,9 @@ export function logWater(
     };
   }
 
-  const recent = mlNearTime(state, ts, QUICK_WINDOW_MS);
-  if (recent + ml > QUICK_WINDOW_MAX_ML) {
+  const duration = Math.min(MAX_DURATION_MIN, Math.max(0, Math.round(durationMin) || 0));
+  const withNew = [...state.checkins.map(toSpan), toSpan({ ts, ml, durationMin: duration })];
+  if (maxMlInWindow(withNew, QUICK_WINDOW_MS) > QUICK_WINDOW_MAX_ML) {
     return {
       ok: false,
       level: "warn",
@@ -314,6 +369,7 @@ export function logWater(
     ts,
     ml,
     coins: earned,
+    durationMin: duration,
     photo: null,
     media: media || null
   };
@@ -375,10 +431,12 @@ export type Growth = {
   toNext: number | null;
 };
 
-// Day keys sort lexically, so a string compare is a date compare.
+// Day keys sort lexically, so a string compare is a date compare. Strictly
+// after planting: a goal already met when you bought the plant belongs to the
+// plant you had before it, so a new plant always starts as a seedling.
 export function growthDays(state: AppState, plantedTs: number) {
   const planted = todayKey(new Date(plantedTs));
-  return Object.keys(state.goalDays).filter((d) => d >= planted).length;
+  return Object.keys(state.goalDays).filter((d) => d > planted).length;
 }
 
 export function growthFor(state: AppState, plantedTs: number): Growth {
@@ -449,10 +507,13 @@ export function buyPlant(state: AppState, plantId: string): BuyResult {
 }
 
 // ---------- Real plants ----------
+// Counted in calendar days, not elapsed hours: a plant watered late yesterday
+// on a 3-day schedule is due in 2 days, not 3.
 export function daysUntilNextWater(p: RealPlant) {
   if (!p.lastWatered) return -1; // never watered = due now
-  const due = p.lastWatered + p.scheduleDays * 24 * 60 * 60 * 1000;
-  return Math.ceil((due - Date.now()) / (24 * 60 * 60 * 1000));
+  const due = new Date(p.lastWatered);
+  due.setDate(due.getDate() + p.scheduleDays);
+  return daysBetweenKeys(todayKey(), todayKey(due));
 }
 
 export function addRealPlant(

@@ -119,8 +119,7 @@ input, select, button { font-size: 1rem; }
 
 /* ----------- Content / screens ----------- */
 .content { padding: 16px; }
-.screen { display: none; }
-.screen.active { display: block; animation: fadeIn .25s ease; }
+.screen { animation: fadeIn .25s ease; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
@@ -1340,3 +1339,24 @@ a.brand:focus-visible { outline: 2px solid var(--green-400); outline-offset: 3px
 }
 .estimator-ml { font-size: 1.05rem; color: var(--ink-soft); }
 .estimator-ml strong { font-size: 1.3rem; color: var(--green-700); }
+
+/* How long the drink took */
+.duration-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.duration-chip {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: border-color .15s ease, background .15s ease, transform .08s ease;
+}
+.duration-chip:hover { border-color: var(--green-200); }
+.duration-chip:active { transform: scale(0.96); }
+.duration-chip.active {
+  border-color: var(--green-500);
+  background: var(--green-50);
+  color: var(--green-700);
+  box-shadow: 0 0 0 2px var(--green-100);
+}

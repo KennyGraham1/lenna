@@ -8,7 +8,7 @@ export default function ShopPage() {
   const { state, buy } = useGarden();
 
   return (
-    <section className="screen screen-shop active" data-screen="shop">
+    <section className="screen">
       <div className="card">
         <h1>🛒 Plant shop</h1>
         <p className="muted">Buy plants with your coins. Complete a set to unlock the next one!</p>

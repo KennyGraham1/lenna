@@ -24,8 +24,10 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
   const [still, setStill] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const resolverRef = useRef<((v: string | null) => void) | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -42,6 +44,8 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
       setStatus(null);
       const resolve = resolverRef.current;
       resolverRef.current = null;
+      openerRef.current?.focus();
+      openerRef.current = null;
       resolve?.(value);
     },
     [stopStream]
@@ -57,6 +61,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
   const openCamera = useCallback<OpenCamera>(
     (nextTitle = "Take a photo") =>
       new Promise<string | null>((resolve) => {
+        openerRef.current = document.activeElement as HTMLElement | null;
         resolverRef.current = resolve;
         setTitle(nextTitle);
         setStill(null);
@@ -108,11 +113,30 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => stopStream, [stopStream]);
 
-  // Escape backs out.
+  // Escape backs out; Tab cycles within the modal rather than escaping to the
+  // page behind it.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") finish(null);
+      if (e.key === "Escape") {
+        finish(null);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === modalRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -133,6 +157,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     <CameraContext.Provider value={openCamera}>
       {children}
       <div
+        ref={modalRef}
         id="camera-modal"
         className={`camera-modal ${open ? "" : "hidden"}`}
         aria-hidden={!open}

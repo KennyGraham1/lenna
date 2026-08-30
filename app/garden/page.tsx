@@ -50,7 +50,7 @@ export default function GardenPage() {
   const detail = owned.find((o) => o.id === selected) ?? null;
 
   return (
-    <section className="screen screen-garden active" data-screen="garden">
+    <section className="screen">
       <div className="card">
         <div className="card-head">
           <h1>🌿 My garden</h1>

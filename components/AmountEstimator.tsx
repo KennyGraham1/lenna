@@ -1,13 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CONTAINERS, estimateMl, fillLabel } from "@/lib/containers";
 
 // Offline estimator: pick the container, say how full it was.
+const LAST_CONTAINER_KEY = "hydration-garden-last-container";
+
 export function AmountEstimator({ onUse }: { onUse: (ml: number) => void }) {
   const [open, setOpen] = useState(false);
   const [containerId, setContainerId] = useState(CONTAINERS[1].id);
   const [fill, setFill] = useState(100);
+
+  // Most people drink from the same few things — start where they left off.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(LAST_CONTAINER_KEY);
+      if (saved && CONTAINERS.some((c) => c.id === saved)) setContainerId(saved);
+    } catch {
+      /* storage unavailable — the default is fine */
+    }
+  }, []);
+
+  const chooseContainer = (id: string) => {
+    setContainerId(id);
+    try {
+      window.localStorage.setItem(LAST_CONTAINER_KEY, id);
+    } catch {
+      /* not worth surfacing */
+    }
+  };
 
   const container = CONTAINERS.find((c) => c.id === containerId) ?? CONTAINERS[1];
   const ml = estimateMl(container.ml, fill);
@@ -31,7 +52,7 @@ export function AmountEstimator({ onUse }: { onUse: (ml: number) => void }) {
                 key={c.id}
                 type="button"
                 className={`estimator-chip ${c.id === containerId ? "active" : ""}`}
-                onClick={() => setContainerId(c.id)}
+                onClick={() => chooseContainer(c.id)}
               >
                 <span aria-hidden="true">{c.icon}</span>
                 <span>{c.label}</span>

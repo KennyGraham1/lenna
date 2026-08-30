@@ -58,7 +58,7 @@ export default function PlantsPage() {
   };
 
   return (
-    <section className="screen screen-plants active" data-screen="plants">
+    <section className="screen">
       <div className="card">
         <h1>🪴 Real plant reminders</h1>
         <p className="muted">Keep your real-life plants happy too.</p>

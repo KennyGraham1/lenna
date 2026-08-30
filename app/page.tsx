@@ -5,8 +5,8 @@ import { STREAK_MILESTONES } from "@/lib/plants";
 import { daysUntilNextWater, fmtTime, todayMl } from "@/lib/state";
 import { useGarden } from "@/components/GardenProvider";
 
-// Ring circumference ≈ 2 * π * 86 ≈ 540
-const RING_DASH = 540;
+const RING_RADIUS = 86;
+const RING_DASH = 2 * Math.PI * RING_RADIUS;
 
 function realPlantSummary(count: number, due: number) {
   if (!count) {
@@ -25,7 +25,7 @@ export default function HomePage() {
   const due = state.realPlants.filter((p) => daysUntilNextWater(p) <= 0).length;
 
   return (
-    <section className="screen screen-home active" data-screen="home">
+    <section className="screen">
       <div className="hero-card">
         <div className="hero-top">
           <h1>Hello, gardener! 🌼</h1>
@@ -34,11 +34,11 @@ export default function HomePage() {
 
         <div className="water-ring">
           <svg viewBox="0 0 200 200" className="ring-svg" aria-hidden="true">
-            <circle cx="100" cy="100" r="86" className="ring-bg" />
+            <circle cx="100" cy="100" r={RING_RADIUS} className="ring-bg" />
             <circle
               cx="100"
               cy="100"
-              r="86"
+              r={RING_RADIUS}
               className="ring-fg"
               id="ring-progress"
               style={{ strokeDasharray: RING_DASH, strokeDashoffset: RING_DASH * (1 - pct) }}

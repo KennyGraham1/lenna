@@ -15,7 +15,7 @@ export default function ProfilePage() {
   const completed = PLANT_SETS.filter((s) => ownedCountInSet(state, s) === s.plants.length);
 
   return (
-    <section className="screen screen-profile active" data-screen="profile">
+    <section className="screen">
       <div className="card profile-hero">
         <div className="avatar">🌻</div>
         <h1>Your gardener stats</h1>

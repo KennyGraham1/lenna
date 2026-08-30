@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DAILY_MAX_ML,
+  MAX_DURATION_MIN,
   QUICK_WINDOW_MAX_ML,
   addRealPlant,
   buyPlant,
@@ -9,12 +10,15 @@ import {
   computeStreak,
   growthFor,
   coinsFor,
+  daysBetweenKeys,
   daysUntilNextWater,
   defaultState,
   logWater,
   refreshStreak,
   removeRealPlant,
   shiftKey,
+  type RealPlant,
+  toSpan,
   todayKey,
   waterRealPlant,
   type AppState
@@ -27,8 +31,8 @@ const HOUR = 60 * MIN;
 const now = Date.now();
 
 /** Log successfully or fail loudly — keeps the arrange step readable. */
-function log(state: AppState, ml: number, at = now): AppState {
-  const r = logWater(state, ml, at);
+function log(state: AppState, ml: number, at = now, durationMin = 0): AppState {
+  const r = logWater(state, ml, at, durationMin);
   if (!r.ok) throw new Error(`expected ok, got: ${r.msg}`);
   return r.state;
 }
@@ -84,6 +88,74 @@ describe("safety caps", () => {
   it("still allows drinks that are genuinely spaced out", () => {
     const s = log(defaultState(), 500, now - HOUR);
     expect(logWater(s, 500, now - 20 * MIN).ok).toBe(true);
+  });
+});
+
+describe("rate cap window maths", () => {
+  it("allows a fill-in between two drinks no window can hold together", () => {
+    // 400 mL at -69 min and -51 min: 18 min apart, so no 10-minute window
+    // contains both. Adding 200 in the middle peaks at 600 mL.
+    let s = log(defaultState(), 400, now - 69 * MIN);
+    s = log(s, 400, now - 51 * MIN);
+    expect(logWater(s, 200, now - 60 * MIN).ok).toBe(true);
+  });
+
+  it("still blocks three drinks that do share one window", () => {
+    let s = log(defaultState(), 400, now - 60 * MIN);
+    s = log(s, 300, now - 55 * MIN);
+    // -60, -55 and -51 all sit inside a 9-minute span: 900 mL.
+    expect(logWater(s, 200, now - 51 * MIN).ok).toBe(false);
+  });
+
+  it("treats exactly ten minutes as inside the window", () => {
+    const s = log(defaultState(), 500, now - 70 * MIN);
+    expect(logWater(s, 400, now - 60 * MIN).ok).toBe(false); // 900 mL in 10 min
+  });
+
+  it("catches a violation created by slotting a drink between two others", () => {
+    let s = log(defaultState(), 500, now - 70 * MIN);
+    s = log(s, 200, now - 62 * MIN); // 8 min apart, 700 mL — fine
+    // The same 8-minute window now holds 900 mL.
+    expect(logWater(s, 200, now - 66 * MIN).ok).toBe(false);
+  });
+});
+
+describe("drinking period", () => {
+  it("blocks a big volume downed in one go", () => {
+    expect(logWater(defaultState(), 900, now, 0).ok).toBe(false);
+  });
+
+  it("allows the same volume sipped over an hour", () => {
+    // 900 mL across 60 min = 150 mL in any 10-minute window.
+    const r = logWater(defaultState(), 900, now, 60);
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.checkin.durationMin).toBe(60);
+  });
+
+  it("still blocks a volume too big for its period", () => {
+    // 900 mL over 10 min is the whole lot inside one window.
+    expect(logWater(defaultState(), 900, now, 10).ok).toBe(false);
+  });
+
+  it("counts only the overlapping share of a sipped drink", () => {
+    // 600 over 30 min = 200 per 10 min; a 650 gulp right after fits.
+    const s = log(defaultState(), 600, now - 30 * MIN, 30);
+    expect(logWater(s, 650, now, 0).ok).toBe(true);
+    // But 900 on top of that overlapping share does not.
+    expect(logWater(s, 900, now, 0).ok).toBe(false);
+  });
+
+  it("treats a drink as ending at the logged time", () => {
+    const r = logWater(defaultState(), 300, now, 20);
+    expect(r.ok).toBe(true);
+    const span = toSpan(r.ok ? r.checkin : { ts: 0, ml: 0 });
+    expect(span.end).toBe(now);
+    expect(span.start).toBe(now - 20 * MIN);
+  });
+
+  it("clamps absurd periods", () => {
+    const r = logWater(defaultState(), 500, now, 99999);
+    expect(r.ok && r.checkin.durationMin).toBe(MAX_DURATION_MIN);
   });
 });
 
@@ -166,6 +238,13 @@ describe("growth", () => {
     expect(growthFor(s, planted).name).toBe("Growing");
   });
 
+  it("does not credit a goal already met on the day of purchase", () => {
+    // Goal hit today, plant bought today -> still a seedling tomorrow morning.
+    const s: AppState = { ...defaultState(), goalDays: { [day(0)]: true } };
+    expect(growthFor(s, Date.now()).days).toBe(0);
+    expect(growthFor(s, Date.now()).name).toBe("Seedling");
+  });
+
   it("ignores goal days from before the plant was bought", () => {
     const goalDays = { [day(20)]: true, [day(1)]: true } as Record<string, true>;
     const s: AppState = { ...defaultState(), goalDays };
@@ -219,6 +298,37 @@ describe("shop", () => {
     });
     const last = buyPlant(s, plants[plants.length - 1].id);
     expect(last.ok && last.setCompleted?.id).toBe(1);
+  });
+});
+
+describe("calendar day counting", () => {
+  it("measures whole days between keys", () => {
+    expect(daysBetweenKeys(todayKey(), todayKey())).toBe(0);
+    expect(daysBetweenKeys(todayKey(), shiftKey(todayKey(), 3))).toBe(3);
+    expect(daysBetweenKeys(todayKey(), shiftKey(todayKey(), -2))).toBe(-2);
+  });
+
+  // Anchored to explicit clock times so the result can't depend on when the
+  // suite happens to run.
+  const at = (dayOffset: number, hour: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + dayOffset);
+    d.setHours(hour, 0, 0, 0);
+    return d.getTime();
+  };
+  const plant = (lastWatered: number): RealPlant => ({
+    id: "x", name: "F", type: "", scheduleDays: 3, created: 0, lastWatered
+  });
+
+  it("counts to the due date, not in elapsed hours", () => {
+    // Watered late yesterday -> due 2 calendar days out, though ~2.04*24h remain.
+    expect(daysUntilNextWater(plant(at(-1, 23)))).toBe(2);
+  });
+
+  it("gives the same answer whatever time of day it was watered", () => {
+    for (const hour of [1, 9, 14, 23]) {
+      expect(daysUntilNextWater(plant(at(0, hour)))).toBe(3);
+    }
   });
 });
 

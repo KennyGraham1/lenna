@@ -16,7 +16,7 @@ import { useToast } from "./ToastProvider";
 
 type GardenContextValue = {
   state: AppState;
-  logWater: (ml: number, at: number, media?: MediaRef | null) => LogResult;
+  logWater: (ml: number, at: number, durationMin: number, media?: MediaRef | null) => LogResult;
   buy: (plantId: string) => void;
   addPlant: (name: string, type: string, days: number | string) => boolean;
   water: (id: string, media?: MediaRef | null) => void;
@@ -108,8 +108,8 @@ export function GardenProvider({ children }: { children: React.ReactNode }) {
 
   // ---------- Actions ----------
   const logWater = useCallback<GardenContextValue["logWater"]>(
-    (ml, at, media) => {
-      const result = game.logWater(ref.current, ml, at, media);
+    (ml, at, durationMin, media) => {
+      const result = game.logWater(ref.current, ml, at, durationMin, media);
       if (result.ok) {
         commit(result.state);
         if (result.goalHit) {
